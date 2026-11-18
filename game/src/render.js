@@ -44,6 +44,19 @@ function makeBackground() {
     s = (s * 1103515245 + 12345) & 0x7fffffff;
     return s / 0x7fffffff;
   };
+  // Tended-garden rings around the Bloom's ground, and a soft vignette.
+  g.strokeStyle = 'rgba(255,220,150,0.05)';
+  for (const rr of [130, 210, 300, 400]) {
+    g.lineWidth = rr % 2 === 0 ? 10 : 2;
+    g.beginPath();
+    g.arc(640, 360, rr, 0, Math.PI * 2);
+    g.stroke();
+  }
+  const vig = g.createRadialGradient(640, 360, 420, 640, 360, 940);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.38)');
+  g.fillStyle = vig;
+  g.fillRect(0, 0, FIELD.width, FIELD.height);
   const washes = ['rgba(88,60,180,0.20)', 'rgba(30,90,160,0.16)', 'rgba(190,60,140,0.10)', 'rgba(30,140,120,0.10)'];
   for (let i = 0; i < 26; i += 1) {
     const x = rnd() * FIELD.width;
@@ -122,6 +135,15 @@ export function createRenderer(canvas) {
     ctx.save();
     ctx.translate(x, y);
     const pulse = 1 + Math.sin(time * 2.2) * 0.045;
+    // Light pooled on the ground around the Bloom.
+    const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 3.6 * pulse);
+    pool.addColorStop(0, 'rgba(255,205,120,0.20)');
+    pool.addColorStop(0.6, 'rgba(255,170,120,0.07)');
+    pool.addColorStop(1, 'rgba(255,170,120,0)');
+    ctx.fillStyle = pool;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 3.6 * pulse, 0, Math.PI * 2);
+    ctx.fill();
     const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 2.6 * pulse);
     glow.addColorStop(0, 'rgba(255,190,220,0.35)');
     glow.addColorStop(1, 'rgba(255,158,207,0)');
@@ -138,6 +160,18 @@ export function createRenderer(canvas) {
       ctx.globalAlpha = 0.9;
       ctx.beginPath();
       ctx.ellipse(radius * 0.78, 0, radius * 0.52, radius * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Inner petals, turning the other way.
+    for (let i = 0; i < 5; i += 1) {
+      const a = (i / 5) * Math.PI * 2 - time * 0.4;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.fillStyle = flash > 0 ? '#ffffff' : '#ffc4dd';
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      ctx.ellipse(radius * 0.45, 0, radius * 0.34, radius * 0.17, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -169,6 +203,19 @@ export function createRenderer(canvas) {
   }
 
   function drawPlayer(p, time) {
+    // Dash afterimages: two fading ghosts trailing the dash.
+    if (p.dashTimer > 0) {
+      const sp = Math.hypot(p.vx, p.vy) || 1;
+      for (const [dist, al] of [[16, 0.22], [32, 0.10]]) {
+        ctx.save();
+        ctx.globalAlpha = al;
+        ctx.fillStyle = COLORS.player;
+        ctx.beginPath();
+        ctx.ellipse(p.x - (p.vx / sp) * dist, p.y - (p.vy / sp) * dist, 15, 11, Math.atan2(p.vy, p.vx), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
     ctx.save();
     ctx.translate(p.x, p.y);
     if (p.invuln > 0 && p.dashTimer <= 0 && Math.floor(time * 18) % 2 === 0) ctx.globalAlpha = 0.45;
@@ -217,6 +264,22 @@ export function createRenderer(canvas) {
   function drawEnemy(e, time) {
     ctx.save();
     ctx.translate(e.x, e.y);
+    // Ground shadow: grounds the moth in the garden's light.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(0, e.radius * 0.95, e.radius * 0.95, e.radius * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (e.kind === KIND_BOSS) {
+      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, e.radius * 2.5);
+      aura.addColorStop(0, 'rgba(170,60,255,0.30)');
+      aura.addColorStop(1, 'rgba(170,60,255,0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const facing = Math.atan2(e.vy, e.vx);
     ctx.rotate(Number.isFinite(facing) ? facing : 0);
     const flap = Math.sin(e.wobble) * 0.5;
